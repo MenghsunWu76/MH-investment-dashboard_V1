@@ -57,13 +57,14 @@ with st.sidebar:
         st.info(f"📉 目前 MDD: -{mdd_pct:.2f}% (ATH: {final_ath:,.0f})")
         
         # 3. 動態基準設定 (Ratchet Rule)
+        # 這是整個階梯的起點 (Base)
         base_exposure = st.number_input(
             "目前基準曝險 % (Tier 1)", 
             value=23.0, 
             min_value=20.0, 
-            max_value=30.0, 
+            max_value=40.0, 
             step=1.0,
-            help="規則：每當歷史回測達 5%，基準調高 1%。"
+            help="此為 Tier 1 的基準。後續每一階會在此基礎上 +5%"
         )
 
     # B. 資產數據輸入
@@ -104,37 +105,45 @@ with st.sidebar:
 
 # --- 3. 邏輯運算引擎 ---
 
-# A. 定義階梯策略表 (動態更新)
+# A. 定義階梯策略表 (動態計算)
+# 邏輯修改：每一階增加 5%
+tier_0 = base_exposure          # Tier 1 (< 5%)
+tier_1 = base_exposure + 5.0    # Tier 1-2 (5-10%)
+tier_2 = base_exposure + 10.0   # Tier 2 (10-25%)
+tier_3 = base_exposure + 15.0   # Tier 3 (25-40%)
+tier_4 = base_exposure + 20.0   # Tier 4 (40-50%)
+tier_5 = base_exposure + 25.0   # Tier 5 (> 50%)
+
 ladder_data = [
-    {"MDD區間": "< 5% (高位)", "目標曝險": base_exposure, "位階": "Tier 1 (基準)"},
-    {"MDD區間": "5% ~ 10%", "目標曝險": max(28.0, base_exposure), "位階": "Tier 1-2 (警戒)"},
-    {"MDD區間": "10% ~ 25%", "目標曝險": 28, "位階": "Tier 2 (初跌)"},
-    {"MDD區間": "25% ~ 40%", "目標曝險": 33, "位階": "Tier 3 (主跌)"},
-    {"MDD區間": "40% ~ 50%", "目標曝險": 40, "位階": "Tier 4 (恐慌)"},
-    {"MDD區間": "> 50%", "目標曝險": 50, "位階": "Tier 5 (毀滅)"},
+    {"MDD區間": "< 5% (高位)", "目標曝險": tier_0, "位階": "Tier 1 (基準)"},
+    {"MDD區間": "5% ~ 10%", "目標曝險": tier_1, "位階": "Tier 1-2 (警戒)"},
+    {"MDD區間": "10% ~ 25%", "目標曝險": tier_2, "位階": "Tier 2 (初跌)"},
+    {"MDD區間": "25% ~ 40%", "目標曝險": tier_3, "位階": "Tier 3 (主跌)"},
+    {"MDD區間": "40% ~ 50%", "目標曝險": tier_4, "位階": "Tier 4 (恐慌)"},
+    {"MDD區間": "> 50%", "目標曝險": tier_5, "位階": "Tier 5 (毀滅)"},
 ]
 
 # B. 判定目前位階與目標
-target_attack_ratio = base_exposure # 預設為基準
+target_attack_ratio = tier_0 # 預設
 current_tier_index = 0
 
 if mdd_pct < 5.0:
-    target_attack_ratio = base_exposure
+    target_attack_ratio = tier_0
     current_tier_index = 0
 elif mdd_pct < 10.0:
-    target_attack_ratio = max(28.0, base_exposure) 
+    target_attack_ratio = tier_1
     current_tier_index = 1
 elif mdd_pct < 25.0:
-    target_attack_ratio = 28.0
+    target_attack_ratio = tier_2
     current_tier_index = 2
 elif mdd_pct < 40.0:
-    target_attack_ratio = 33.0
+    target_attack_ratio = tier_3
     current_tier_index = 3
 elif mdd_pct < 50.0:
-    target_attack_ratio = 40.0
+    target_attack_ratio = tier_4
     current_tier_index = 4
 else:
-    target_attack_ratio = 50.0
+    target_attack_ratio = tier_5
     current_tier_index = 5
 
 current_tier_name = ladder_data[current_tier_index]["位階"]
@@ -189,10 +198,11 @@ def highlight_current_row(row):
     return [f'background-color: {color}' for _ in row]
 
 with m3:
+    st.caption(f"ℹ️ 階梯邏輯：基準 ({base_exposure:.0f}%) 每層 +5%")
     st.dataframe(
         df_ladder.style
         .apply(highlight_current_row, axis=1)
-        .format({"目標曝險": "{:.0f}%"}), # <--- 新增這裡：強制顯示為百分比
+        .format({"目標曝險": "{:.0f}%"}),
         hide_index=True,
         use_container_width=True
     )
