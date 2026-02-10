@@ -3,9 +3,8 @@ import pandas as pd
 import plotly.express as px
 import yfinance as yf
 
-# --- 1. 頁面基礎設定 (隱藏過大的標題介面) ---
+# --- 1. 頁面基礎設定 ---
 st.set_page_config(page_title="全天候戰情室", layout="wide")
-# 移除原本的大標題 st.title(...) 和 st.caption(...)，改為簡單的頂部資訊或直接進入內容
 
 # --- 2. 自動抓取 ATH 引擎 ---
 @st.cache_data(ttl=3600) # 設定 1 小時快取
@@ -28,7 +27,7 @@ with st.spinner('正在連線計算歷史高點 (ATH)...'):
 with st.sidebar:
     st.header("📝 監控數據輸入")
     
-    # A. 市場數據 & ATH 修正 (新功能)
+    # A. 市場數據 & ATH 修正
     with st.expander("0. 市場位階 (ATH 修正)", expanded=True):
         
         # --- ATH 邏輯 ---
@@ -49,7 +48,7 @@ with st.sidebar:
         # 1. 手動輸入今日點數
         current_index = st.number_input("今日大盤收盤點數", value=31346.0, step=10.0, format="%.0f")
         
-        # 2. 計算 MDD (使用 final_ath)
+        # 2. 計算 MDD
         if final_ath > 0:
             mdd_pct = ((final_ath - current_index) / final_ath) * 100
         else:
@@ -64,7 +63,7 @@ with st.sidebar:
             min_value=20.0, 
             max_value=30.0, 
             step=1.0,
-            help="規則：每當歷史回測達 5%，基準調高 1%。目前已調高至 23%。"
+            help="規則：每當歷史回測達 5%，基準調高 1%。"
         )
 
     # B. 資產數據輸入
@@ -176,7 +175,7 @@ threshold = 3.0
 
 # --- 4. 儀表板顯示區 ---
 
-# === 區塊一：戰略位階地圖 (已移除原有的標題介面) ===
+# === 區塊一：戰略位階地圖 ===
 st.subheader("1. 動態戰略地圖")
 
 m1, m2, m3 = st.columns([1, 1, 2])
@@ -191,7 +190,9 @@ def highlight_current_row(row):
 
 with m3:
     st.dataframe(
-        df_ladder.style.apply(highlight_current_row, axis=1),
+        df_ladder.style
+        .apply(highlight_current_row, axis=1)
+        .format({"目標曝險": "{:.0f}%"}), # <--- 新增這裡：強制顯示為百分比
         hide_index=True,
         use_container_width=True
     )
