@@ -19,11 +19,26 @@ def load_last_record():
         return df.iloc[-1] if not df.empty else None
     except: return None
 
-def save_record(total, net, mdd, date_str):
-    new_data = {"Date": [date_str], "Total_Assets": [total], "Net_Assets": [net], "MDD": [mdd]}
-    new_df = pd.DataFrame(new_data)
-    if not os.path.exists(HISTORY_FILE): new_df.to_csv(HISTORY_FILE, index=False)
-    else: new_df.to_csv(HISTORY_FILE, mode='a', header=False, index=False)
+def save_record(data_dict):
+    """
+    儲存完整紀錄到 CSV
+    data_dict 包含: Date, Total, Net, MDD, 以及各檔股票的 P(價格) 與 S(股數)
+    """
+    # 將字典轉換為 DataFrame (單列)
+    new_df = pd.DataFrame([data_dict])
+    
+    if not os.path.exists(HISTORY_FILE):
+        new_df.to_csv(HISTORY_FILE, index=False)
+    else:
+        # 如果檔案存在，讀取舊檔案以確保欄位一致 (避免新舊格式衝突)
+        try:
+            existing_df = pd.read_csv(HISTORY_FILE)
+            # 使用 pd.concat 合併，自動對齊欄位
+            updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+            updated_df.to_csv(HISTORY_FILE, index=False)
+        except:
+            # 若讀取失敗 (例如格式爛掉)，則直接覆蓋或重寫
+            new_df.to_csv(HISTORY_FILE, mode='a', header=False, index=False)
 
 # --- 3. 自動抓取 ATH 引擎 ---
 @st.cache_data(ttl=3600)
@@ -82,7 +97,6 @@ with st.sidebar:
         s_713 = c2.number_input("00713 股數", value=66000, step=1000)
 
     with st.expander("4. 子彈庫 (國庫券/債券)", expanded=True):
-        # 【修改】已移除 00948B，只保留 00865B
         c1, c2 = st.columns(2)
         p_865 = c1.number_input("00865B 價格", value=47.51, step=0.01)
         s_865 = c2.number_input("00865B 股數", value=10000, step=1000)
@@ -125,16 +139,14 @@ v_670 = p_670 * s_670
 v_662 = p_662 * s_662
 v_713 = p_713 * s_713
 v_865 = p_865 * s_865
-# 【修改】移除 v_948 計算
 
 val_attack = v_675 + v_631 + v_670
 val_core = v_662
 val_defense = v_713
-val_ammo = v_865 # 【修改】子彈庫只剩 00865B
+val_ammo = v_865
 total_assets = val_attack + val_core + val_defense + val_ammo
 net_assets = total_assets - loan_amount
 
-# 【修改】Beta 計算移除 00948B
 beta_weighted_sum = ((v_675*1.6) + (v_631*1.6) + (v_670*2.0) + (v_713*0.6) + (v_662*1.0) + (v_865*0.0))
 portfolio_beta = beta_weighted_sum / total_assets if total_assets > 0 else 0
 maintenance_ratio = (total_assets / loan_amount) * 100 if loan_amount > 0 else 999
@@ -155,9 +167,24 @@ else:
 with st.sidebar:
     st.markdown("---")
     st.subheader("💾 紀錄管理")
-    if st.button("💾 儲存今日資產紀錄", type="primary"):
+    if st.button("💾 儲存今日資產紀錄 (含明細)", type="primary"):
         now_str = datetime.now(pytz.timezone('Asia/Taipei')).strftime("%Y-%m-%d %H:%M")
-        save_record(total_assets, net_assets, mdd_pct, now_str)
+        
+        # 準備要儲存的所有資料
+        save_data = {
+            "Date": now_str,
+            "Total_Assets": total_assets,
+            "Net_Assets": net_assets,
+            "MDD": mdd_pct,
+            # 股價 (P)
+            "P_675": p_675, "P_631": p_631, "P_670": p_670,
+            "P_662": p_662, "P_713": p_713, "P_865": p_865,
+            # 股數 (S)
+            "S_675": s_675, "S_631": s_631, "S_670": s_670,
+            "S_662": s_662, "S_713": s_713, "S_865": s_865
+        }
+        
+        save_record(save_data)
         st.success(f"已儲存！時間: {now_str}")
         st.rerun()
 
@@ -210,7 +237,6 @@ with tab1:
     c1, c2 = st.columns([2, 1])
     with c1:
         st.markdown("**資產配置佔比**")
-        # 【修改】資產類別移除 00948B 的影響
         chart_data = pd.DataFrame({
             '資產類別': ['攻擊型 (正二)', '核心 (00662)', '防禦 (00713)', '子彈庫 (債券)'],
             '市值': [val_attack, val_core, val_defense, val_ammo]
@@ -250,7 +276,6 @@ with tab1:
                 
     st.markdown("---")
     with st.expander("📊 查看詳細資產清單"):
-        # 【修改】詳細清單移除 00948B
          detail_data = {
             '代號': ['00675L', '00631L', '00670L', '00662', '00713', '00865B'],
             '類別': ['攻擊', '攻擊', '攻擊', '核心', '防禦', '子彈'],
@@ -280,7 +305,7 @@ with tab2:
     
     3.  **存檔記錄 (Archive)**
         * 確認無誤後，點擊側邊欄底部的 **「💾 儲存今日資產紀錄」**。
-        * 系統會自動計算與上次的資產差異。
+        * 系統會將**總資產**與**所有持股明細 (價格與股數)** 一併寫入 CSV。
     """)
     
     st.divider()
