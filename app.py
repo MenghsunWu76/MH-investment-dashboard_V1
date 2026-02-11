@@ -82,12 +82,10 @@ with st.sidebar:
         s_713 = c2.number_input("00713 股數", value=66000, step=1000)
 
     with st.expander("4. 子彈庫 (國庫券/債券)", expanded=True):
+        # 【修改】移除 00948B，只保留 00865B
         c1, c2 = st.columns(2)
         p_865 = c1.number_input("00865B 價格", value=47.51, step=0.01)
         s_865 = c2.number_input("00865B 股數", value=10000, step=1000)
-        c3, c4 = st.columns(2)
-        p_948 = c3.number_input("00948B 價格", value=9.63, step=0.01)
-        s_948 = c4.number_input("00948B 股數", value=50000, step=1000)
 
     st.subheader("5. 負債監控")
     loan_amount = st.number_input("目前質押借款總額 (O)", value=2350000, step=10000)
@@ -127,16 +125,17 @@ v_670 = p_670 * s_670
 v_662 = p_662 * s_662
 v_713 = p_713 * s_713
 v_865 = p_865 * s_865
-v_948 = p_948 * s_948
+# 【修改】移除 v_948 計算
 
 val_attack = v_675 + v_631 + v_670
 val_core = v_662
 val_defense = v_713
-val_ammo = v_865 + v_948
+val_ammo = v_865 # 【修改】子彈庫只剩 00865B
 total_assets = val_attack + val_core + val_defense + val_ammo
 net_assets = total_assets - loan_amount
 
-beta_weighted_sum = ((v_675*1.6) + (v_631*1.6) + (v_670*2.0) + (v_713*0.6) + (v_662*1.0) + (v_865*0.0) + (v_948*-0.1))
+# 【修改】Beta 計算移除 00948B
+beta_weighted_sum = ((v_675*1.6) + (v_631*1.6) + (v_670*2.0) + (v_713*0.6) + (v_662*1.0) + (v_865*0.0))
 portfolio_beta = beta_weighted_sum / total_assets if total_assets > 0 else 0
 maintenance_ratio = (total_assets / loan_amount) * 100 if loan_amount > 0 else 999
 loan_ratio = (loan_amount / total_assets) * 100 if total_assets > 0 else 0
@@ -211,6 +210,7 @@ with tab1:
     c1, c2 = st.columns([2, 1])
     with c1:
         st.markdown("**資產配置佔比**")
+        # 【修改】資產類別移除 00948B 的影響
         chart_data = pd.DataFrame({
             '資產類別': ['攻擊型 (正二)', '核心 (00662)', '防禦 (00713)', '子彈庫 (債券)'],
             '市值': [val_attack, val_core, val_defense, val_ammo]
@@ -250,11 +250,12 @@ with tab1:
                 
     st.markdown("---")
     with st.expander("📊 查看詳細資產清單"):
+        # 【修改】詳細清單移除 00948B
          detail_data = {
-            '代號': ['00675L', '00631L', '00670L', '00662', '00713', '00865B', '00948B'],
-            '類別': ['攻擊', '攻擊', '攻擊', '核心', '防禦', '子彈', '子彈'],
-            'Beta': [1.60, 1.60, 2.00, 1.00, 0.60, 0.00, -0.10],
-            '市值': [v_675, v_631, v_670, v_662, v_713, v_865, v_948]
+            '代號': ['00675L', '00631L', '00670L', '00662', '00713', '00865B'],
+            '類別': ['攻擊', '攻擊', '攻擊', '核心', '防禦', '子彈'],
+            'Beta': [1.60, 1.60, 2.00, 1.00, 0.60, 0.00],
+            '市值': [v_675, v_631, v_670, v_662, v_713, v_865]
         }
          st.dataframe(pd.DataFrame(detail_data).style.format({"市值": "${:,.0f}", "Beta": "{:.2f}"}))
 
