@@ -44,26 +44,50 @@ def get_ath_data():
 with st.spinner('正在連線計算歷史高點 (ATH)...'):
     ath_auto = get_ath_data()
 
-# --- 4. 側邊欄輸入區 ---
+# --- 4. 初始化 Session State (關鍵修正：解決黃色警告) ---
+# 這個函數確保所有變數在建立輸入框之前都已經在記憶體中，避免衝突
+def init_state(key, default_value):
+    if key not in st.session_state:
+        st.session_state[key] = default_value
+
+# 初始化所有輸入框的預設值
+init_state('manual_ath_check', False)
+init_state('input_ath', ath_auto)
+init_state('input_index', 31346.0)
+
+# 資產預設值
+defaults = {
+    'p_675': 185.0, 's_675': 11000,
+    'p_631': 466.7, 's_631': 331,
+    'p_670': 157.95, 's_670': 616,
+    'p_662': 102.25, 's_662': 25840,
+    'p_713': 52.10, 's_713': 66000,
+    'p_865': 47.51, 's_865': 10000
+}
+for k, v in defaults.items():
+    init_state(k, v)
+
+# --- 5. 側邊欄輸入區 ---
 with st.sidebar:
     st.header("📝 監控數據輸入")
     
-    # === 新增功能：一鍵讀取 ===
+    # === 一鍵讀取功能 ===
     if st.button("📂 載入上次存檔數據", type="secondary", help="點擊後將自動填入上次儲存的股價、股數與大盤點數"):
         last_data = load_last_record()
         if last_data is not None:
             try:
-                # 更新 Session State (這會直接改變輸入框的預設值)
+                # 直接更新 Session State
                 st.session_state['input_index'] = float(last_data['Current_Index'])
                 st.session_state['input_ath'] = float(last_data['ATH'])
-                st.session_state['manual_ath_check'] = True # 強制勾選多動修正，以確保顯示存檔的 ATH
+                st.session_state['manual_ath_check'] = True # 強制勾選
                 
                 # 更新股價 (P) 與 股數 (S)
                 for code in ['675', '631', '670', '662', '713', '865']:
-                    st.session_state[f'p_{code}'] = float(last_data[f'P_00{code}']) # 對應存檔的 key
+                    st.session_state[f'p_{code}'] = float(last_data[f'P_00{code}'])
                     st.session_state[f's_{code}'] = int(last_data[f'S_00{code}'])
                 
                 st.toast("✅ 成功載入上次數據！", icon="📂")
+                st.rerun() # 強制刷新畫面以顯示新數值
             except Exception as e:
                 st.error(f"載入失敗 (可能是舊存檔格式不符): {e}")
         else:
@@ -73,18 +97,19 @@ with st.sidebar:
     with st.expander("0. 市場位階 (ATH 修正)", expanded=True):
         col_ath1, col_ath2 = st.columns([2, 1])
         with col_ath1: st.metric("自動抓取 ATH", f"{ath_auto:,.0f}")
-        # 綁定 key 以便程式控制
-        with col_ath2: use_manual_ath = st.checkbox("手動修正", value=False, key="manual_ath_check")
+        with col_ath2: 
+            # 這裡移除了 value=...，完全依賴 session_state
+            use_manual_ath = st.checkbox("手動修正", key="manual_ath_check")
             
-        # 綁定 key 以便程式控制
         if use_manual_ath:
-            final_ath = st.number_input("輸入正確 ATH", value=ath_auto, step=10.0, format="%.0f", key="input_ath")
+            # 這裡移除了 value=...，完全依賴 session_state
+            final_ath = st.number_input("輸入正確 ATH", step=10.0, format="%.0f", key="input_ath")
         else:
             final_ath = ath_auto
         
         st.markdown("---")
-        # 綁定 key 以便程式控制
-        current_index = st.number_input("今日大盤收盤點數", value=31346.0, step=10.0, format="%.0f", key="input_index")
+        # 這裡移除了 value=...，完全依賴 session_state
+        current_index = st.number_input("今日大盤收盤點數", step=10.0, format="%.0f", key="input_index")
         
         mdd_pct = ((final_ath - current_index) / final_ath) * 100 if final_ath > 0 else 0.0
         st.info(f"📉 目前 MDD: {mdd_pct:.2f}% (ATH: {final_ath:,.0f})")
@@ -94,37 +119,37 @@ with st.sidebar:
         level_sign = "+" if ratchet_level > 0 else ""
         st.caption(f"ℹ️ 目前位階: {level_sign}{ratchet_level}")
 
-    # B. 資產數據輸入 (所有輸入框都綁定 key)
+    # B. 資產數據輸入 (全部移除 value=...，改用 key 綁定)
     with st.expander("1. 攻擊型資產 (正二)", expanded=True):
         c1, c2 = st.columns(2)
-        p_675 = c1.number_input("00675L 價格", value=185.0, step=0.1, key="p_675")
-        s_675 = c2.number_input("00675L 股數", value=11000, step=1000, key="s_675")
+        p_675 = c1.number_input("00675L 價格", step=0.1, key="p_675")
+        s_675 = c2.number_input("00675L 股數", step=1000, key="s_675")
         c3, c4 = st.columns(2)
-        p_631 = c3.number_input("00631L 價格", value=466.7, step=0.1, key="p_631")
-        s_631 = c4.number_input("00631L 股數", value=331, step=100, key="s_631")
+        p_631 = c3.number_input("00631L 價格", step=0.1, key="p_631")
+        s_631 = c4.number_input("00631L 股數", step=100, key="s_631")
         c5, c6 = st.columns(2)
-        p_670 = c5.number_input("00670L 價格", value=157.95, step=0.1, key="p_670")
-        s_670 = c6.number_input("00670L 股數", value=616, step=100, key="s_670")
+        p_670 = c5.number_input("00670L 價格", step=0.1, key="p_670")
+        s_670 = c6.number_input("00670L 股數", step=100, key="s_670")
 
     with st.expander("2. 核心資產 (美股)", expanded=True):
         c1, c2 = st.columns(2)
-        p_662 = c1.number_input("00662 價格", value=102.25, step=0.1, key="p_662")
-        s_662 = c2.number_input("00662 股數", value=25840, step=100, key="s_662")
+        p_662 = c1.number_input("00662 價格", step=0.1, key="p_662")
+        s_662 = c2.number_input("00662 股數", step=100, key="s_662")
 
     with st.expander("3. 防禦資產 (現金流)", expanded=True):
         c1, c2 = st.columns(2)
-        p_713 = c1.number_input("00713 價格", value=52.10, step=0.05, key="p_713")
-        s_713 = c2.number_input("00713 股數", value=66000, step=1000, key="s_713")
+        p_713 = c1.number_input("00713 價格", step=0.05, key="p_713")
+        s_713 = c2.number_input("00713 股數", step=1000, key="s_713")
 
     with st.expander("4. 子彈庫 (國庫券/債券)", expanded=True):
         c1, c2 = st.columns(2)
-        p_865 = c1.number_input("00865B 價格", value=47.51, step=0.01, key="p_865")
-        s_865 = c2.number_input("00865B 股數", value=10000, step=1000, key="s_865")
+        p_865 = c1.number_input("00865B 價格", step=0.01, key="p_865")
+        s_865 = c2.number_input("00865B 股數", step=1000, key="s_865")
 
     st.subheader("5. 負債監控")
     loan_amount = st.number_input("目前質押借款總額 (O)", value=2350000, step=10000)
 
-# --- 5. 運算引擎 ---
+# --- 6. 運算引擎 ---
 tier_0 = base_exposure
 tier_1 = base_exposure + 5.0
 tier_2 = base_exposure + 5.0
@@ -175,7 +200,7 @@ current_attack_ratio = (val_attack / total_assets) * 100 if total_assets > 0 els
 gap = current_attack_ratio - target_attack_ratio
 threshold = 3.0
 
-# --- 6. 讀取與儲存歷史資料 ---
+# --- 7. 讀取與儲存歷史資料 ---
 last_record = load_last_record()
 diff_total = 0
 if last_record is not None:
@@ -190,14 +215,14 @@ with st.sidebar:
     if st.button("💾 儲存今日資產紀錄 (含明細)", type="primary"):
         now_str = datetime.now(pytz.timezone('Asia/Taipei')).strftime("%Y-%m-%d %H:%M")
         
-        # 準備要儲存的所有資料 (新增 大盤與 ATH)
+        # 準備要儲存的所有資料 (含 大盤與 ATH)
         save_data = {
             "Date": now_str,
             "Total_Assets": total_assets,
             "Net_Assets": net_assets,
             "MDD": mdd_pct,
-            "Current_Index": current_index, # 新增
-            "ATH": final_ath,               # 新增
+            "Current_Index": current_index,
+            "ATH": final_ath,
             # 股價 (P)
             "P_00675": p_675, "P_00631": p_631, "P_00670": p_670,
             "P_00662": p_662, "P_00713": p_713, "P_00865": p_865,
@@ -213,7 +238,7 @@ with st.sidebar:
     if last_record is not None:
         st.caption(f"上次存檔: {last_date_str}")
 
-# --- 7. 主畫面 (分頁系統) ---
+# --- 8. 主畫面 (分頁系統) ---
 
 tab1, tab2 = st.tabs(["📊 戰情室 Dashboard", "📖 操作指南 & 指標解讀"])
 
@@ -309,76 +334,19 @@ with tab1:
 # === 分頁 2: 操作指南 ===
 with tab2:
     st.title("📖 全天候系統操作指南 (SOP)")
-    
-    st.subheader("⚙️ 每日操作流程 (Daily Routine)")
+    st.subheader("⚙️ 每日操作流程")
     st.markdown("""
-    1.  **資料更新 (Data Check)**
-        * **[New!]** 點擊側邊欄上方的 **「📂 載入上次存檔數據」**，快速還原上次的持股狀態。
-        * 確認側邊欄的 `自動抓取 ATH` 數值是否合理。若有落差，勾選「手動修正」並輸入正確數值。
-        * 確認 `今日大盤收盤點數` 為最新數據。
+    1.  **資料更新**
+        * 點擊側邊欄上方的 **「📂 載入上次存檔數據」**。
+        * 確認 `自動抓取 ATH` 與 `今日大盤` 數值。
         * 更新各類資產的 **「股數」** 與最新的 **「質押借款總額」**。
-    
-    2.  **儀表板判讀 (Dashboard Check)**
-        * 觀察 **「戰略地圖」**：確認目前位階 (Tier) 與 目標曝險 %。
-        * 檢查 **「紅綠燈訊號」**：
-            * 🟢 **綠燈 (買進)**：偏離度 < -3%，且維持率健康 (>300%)。
-            * 🔴 **紅燈 (賣出)**：偏離度 > +3%，需執行再平衡，將獲利轉入子彈庫。
-            * 🟠 **黃燈 (風險)**：維持率 < 300% 或 負債比 > 35%，禁止加碼，優先還款。
-            * ✅ **待機**：偏離度在 +/- 3% 內，不做動作，讓複利奔跑。
-    
-    3.  **存檔記錄 (Archive)**
-        * 確認無誤後，點擊側邊欄底部的 **「💾 儲存今日資產紀錄」**。
-        * 系統會自動計算與上次的資產差異。
+    2.  **儀表板判讀**
+        * 觀察 **「戰略地圖」** 與 **「紅綠燈訊號」**。
+    3.  **存檔記錄**
+        * 點擊 **「💾 儲存今日資產紀錄」**，系統將保存所有數據。
     """)
-    
     st.divider()
-    
-    st.subheader("🔍 核心指標深度解讀 (Metric Deep Dive)")
-    
-    with st.expander("1. MDD (最大回檔) 與 戰略位階 (Tier)"):
-        st.markdown("""
-        * **定義**：目前大盤指數距離歷史最高點 (ATH) 的跌幅百分比。
-        * **作用**：用來判斷市場的「恐慌程度」。
-        * **策略邏輯**：
-            * **< 5% (高位)**：保持基準曝險 (Base)，不追高。
-            * **5~10% (警戒)**：小幅加碼 (+5%)。
-            * **10~20% (初跌)**：進入價值區，依階梯加碼。
-            * **> 20% (主跌段)**：市場恐慌，此時應由子彈庫提供銀彈，大幅加碼攻擊型資產。
-        """)
-
-    with st.expander("2. Gap (偏離度) 與 閥值再平衡"):
-        st.markdown("""
-        * **定義**：`目前攻擊曝險` - `目標攻擊曝險` 的差值。
-        * **閥值 (Threshold)**：設定為 **3%**。
-        * **作用**：過濾市場雜訊，避免頻繁交易。
-        * **操作**：
-            * 只有當 Gap 超過 **+3%** (漲太多) 或 低於 **-3%** (跌太深) 時，才需要動手。
-            * 這是一種「被動擇時」策略，強迫自己「買低賣高」。
-        """)
-
-    with st.expander("3. T值 (整戶維持率) - 生存底線"):
-        st.markdown("""
-        * **公式**：`總資產市值 / 質押借款金額 * 100%`
-        * **券商斷頭線**：通常為 **130%** (低於此數值會被強制賣股)。
-        * **本系統安全線**：**300%**。
-        * **警戒線**：**250%**。一旦低於此數值，系統會亮出「紅色警戒」，此時**禁止任何買進動作**，必須優先賣出資產或補錢來償還債務，確保生存。
-        """)
-
-    with st.expander("4. U值 (質押負債比) - 槓桿天花板"):
-        st.markdown("""
-        * **公式**：`質押借款金額 / 總資產市值 * 100%`
-        * **作用**：控制總槓桿水準。
-        * **限制**：系統建議不要超過 **35%**。
-        * **解讀**：負債比過高代表槓桿開太大，雖然上漲時賺很快，但下跌時維持率會掉得非常快。控制在 35% 以下是長期持有的舒適區。
-        """)
-
-    with st.expander("5. Ratchet Rule (棘輪效應) - 動態基準"):
-        st.markdown("""
-        * **定義**：隨著資產規模成長或對市場信心增加，逐步調高「基準曝險 (Base Exposure)」。
-        * **邏輯**：
-            * 基準 20% -> 0 位階
-            * 基準 21% -> +1 位階
-            * ...
-            * 基準 30% -> +10 位階
-        * **效果**：這讓整套階梯系統可以「只進不退」，當您調高基準時，所有 MDD 區間的目標曝險都會同步墊高，讓資金利用率最大化。
-        """)
+    st.subheader("🔍 核心指標深度解讀")
+    with st.expander("1. MDD (最大回檔)"): st.write("目前大盤指數距離歷史最高點 (ATH) 的跌幅。")
+    with st.expander("2. Gap (偏離度)"): st.write("目前攻擊曝險 - 目標攻擊曝險。")
+    with st.expander("3. T值 (維持率)"): st.write("總資產 / 負債。低於 250% 為紅燈。")
