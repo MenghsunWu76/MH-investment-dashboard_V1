@@ -44,13 +44,11 @@ def get_ath_data():
 with st.spinner('正在連線計算歷史高點 (ATH)...'):
     ath_auto = get_ath_data()
 
-# --- 4. 初始化 Session State (關鍵修正：解決黃色警告) ---
-# 這個函數確保所有變數在建立輸入框之前都已經在記憶體中，避免衝突
+# --- 4. 初始化 Session State ---
 def init_state(key, default_value):
     if key not in st.session_state:
         st.session_state[key] = default_value
 
-# 初始化所有輸入框的預設值
 init_state('manual_ath_check', False)
 init_state('input_ath', ath_auto)
 init_state('input_index', 31346.0)
@@ -76,18 +74,16 @@ with st.sidebar:
         last_data = load_last_record()
         if last_data is not None:
             try:
-                # 直接更新 Session State
                 st.session_state['input_index'] = float(last_data['Current_Index'])
                 st.session_state['input_ath'] = float(last_data['ATH'])
-                st.session_state['manual_ath_check'] = True # 強制勾選
+                st.session_state['manual_ath_check'] = True 
                 
-                # 更新股價 (P) 與 股數 (S)
                 for code in ['675', '631', '670', '662', '713', '865']:
                     st.session_state[f'p_{code}'] = float(last_data[f'P_00{code}'])
                     st.session_state[f's_{code}'] = int(last_data[f'S_00{code}'])
                 
                 st.toast("✅ 成功載入上次數據！", icon="📂")
-                st.rerun() # 強制刷新畫面以顯示新數值
+                st.rerun()
             except Exception as e:
                 st.error(f"載入失敗 (可能是舊存檔格式不符): {e}")
         else:
@@ -97,18 +93,14 @@ with st.sidebar:
     with st.expander("0. 市場位階 (ATH 修正)", expanded=True):
         col_ath1, col_ath2 = st.columns([2, 1])
         with col_ath1: st.metric("自動抓取 ATH", f"{ath_auto:,.0f}")
-        with col_ath2: 
-            # 這裡移除了 value=...，完全依賴 session_state
-            use_manual_ath = st.checkbox("手動修正", key="manual_ath_check")
+        with col_ath2: use_manual_ath = st.checkbox("手動修正", key="manual_ath_check")
             
         if use_manual_ath:
-            # 這裡移除了 value=...，完全依賴 session_state
             final_ath = st.number_input("輸入正確 ATH", step=10.0, format="%.0f", key="input_ath")
         else:
             final_ath = ath_auto
         
         st.markdown("---")
-        # 這裡移除了 value=...，完全依賴 session_state
         current_index = st.number_input("今日大盤收盤點數", step=10.0, format="%.0f", key="input_index")
         
         mdd_pct = ((final_ath - current_index) / final_ath) * 100 if final_ath > 0 else 0.0
@@ -119,7 +111,7 @@ with st.sidebar:
         level_sign = "+" if ratchet_level > 0 else ""
         st.caption(f"ℹ️ 目前位階: {level_sign}{ratchet_level}")
 
-    # B. 資產數據輸入 (全部移除 value=...，改用 key 綁定)
+    # B. 資產數據輸入
     with st.expander("1. 攻擊型資產 (正二)", expanded=True):
         c1, c2 = st.columns(2)
         p_675 = c1.number_input("00675L 價格", step=0.1, key="p_675")
@@ -215,7 +207,6 @@ with st.sidebar:
     if st.button("💾 儲存今日資產紀錄 (含明細)", type="primary"):
         now_str = datetime.now(pytz.timezone('Asia/Taipei')).strftime("%Y-%m-%d %H:%M")
         
-        # 準備要儲存的所有資料 (含 大盤與 ATH)
         save_data = {
             "Date": now_str,
             "Total_Assets": total_assets,
@@ -350,3 +341,15 @@ with tab2:
     with st.expander("1. MDD (最大回檔)"): st.write("目前大盤指數距離歷史最高點 (ATH) 的跌幅。")
     with st.expander("2. Gap (偏離度)"): st.write("目前攻擊曝險 - 目標攻擊曝險。")
     with st.expander("3. T值 (維持率)"): st.write("總資產 / 負債。低於 250% 為紅燈。")
+    
+    # 【新增】U值深度解讀
+    with st.expander("4. U值 (質押負債比) - 槓桿天花板"):
+        st.markdown("""
+        * **公式**：`質押借款金額 / 總資產市值 * 100%`
+        * **作用**：監控整體槓桿倍數 (Leverage Ratio)。
+        * **安全上限**：**35%**。
+        * **深度解讀**：
+            * **< 30% (舒適區)**：進可攻退可守，遇到崩盤也不容易斷頭。
+            * **30%~35% (效率區)**：資金利用率高，但需密切關注大盤。
+            * **> 35% (危險區)**：雖然還沒斷頭，但容錯空間極小。一旦大盤回調 10-15%，維持率就會瞬間掉到警戒線。建議在此水位只還不借。
+        """)
