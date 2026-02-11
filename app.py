@@ -20,24 +20,16 @@ def load_last_record():
     except: return None
 
 def save_record(data_dict):
-    """
-    儲存完整紀錄到 CSV
-    data_dict 包含: Date, Total, Net, MDD, 以及各檔股票的 P(價格) 與 S(股數)
-    """
-    # 將字典轉換為 DataFrame (單列)
+    """儲存完整紀錄到 CSV"""
     new_df = pd.DataFrame([data_dict])
-    
     if not os.path.exists(HISTORY_FILE):
         new_df.to_csv(HISTORY_FILE, index=False)
     else:
-        # 如果檔案存在，讀取舊檔案以確保欄位一致 (避免新舊格式衝突)
         try:
             existing_df = pd.read_csv(HISTORY_FILE)
-            # 使用 pd.concat 合併，自動對齊欄位
             updated_df = pd.concat([existing_df, new_df], ignore_index=True)
             updated_df.to_csv(HISTORY_FILE, index=False)
         except:
-            # 若讀取失敗 (例如格式爛掉)，則直接覆蓋或重寫
             new_df.to_csv(HISTORY_FILE, mode='a', header=False, index=False)
 
 # --- 3. 自動抓取 ATH 引擎 ---
@@ -56,15 +48,43 @@ with st.spinner('正在連線計算歷史高點 (ATH)...'):
 with st.sidebar:
     st.header("📝 監控數據輸入")
     
+    # === 新增功能：一鍵讀取 ===
+    if st.button("📂 載入上次存檔數據", type="secondary", help="點擊後將自動填入上次儲存的股價、股數與大盤點數"):
+        last_data = load_last_record()
+        if last_data is not None:
+            try:
+                # 更新 Session State (這會直接改變輸入框的預設值)
+                st.session_state['input_index'] = float(last_data['Current_Index'])
+                st.session_state['input_ath'] = float(last_data['ATH'])
+                st.session_state['manual_ath_check'] = True # 強制勾選多動修正，以確保顯示存檔的 ATH
+                
+                # 更新股價 (P) 與 股數 (S)
+                for code in ['675', '631', '670', '662', '713', '865']:
+                    st.session_state[f'p_{code}'] = float(last_data[f'P_00{code}']) # 對應存檔的 key
+                    st.session_state[f's_{code}'] = int(last_data[f'S_00{code}'])
+                
+                st.toast("✅ 成功載入上次數據！", icon="📂")
+            except Exception as e:
+                st.error(f"載入失敗 (可能是舊存檔格式不符): {e}")
+        else:
+            st.warning("⚠️ 找不到存檔紀錄")
+
     # A. 市場數據 & ATH 修正
     with st.expander("0. 市場位階 (ATH 修正)", expanded=True):
         col_ath1, col_ath2 = st.columns([2, 1])
         with col_ath1: st.metric("自動抓取 ATH", f"{ath_auto:,.0f}")
-        with col_ath2: use_manual_ath = st.checkbox("手動修正", value=False)
+        # 綁定 key 以便程式控制
+        with col_ath2: use_manual_ath = st.checkbox("手動修正", value=False, key="manual_ath_check")
             
-        final_ath = st.number_input("輸入正確 ATH", value=ath_auto, step=10.0, format="%.0f") if use_manual_ath else ath_auto
+        # 綁定 key 以便程式控制
+        if use_manual_ath:
+            final_ath = st.number_input("輸入正確 ATH", value=ath_auto, step=10.0, format="%.0f", key="input_ath")
+        else:
+            final_ath = ath_auto
+        
         st.markdown("---")
-        current_index = st.number_input("今日大盤收盤點數", value=31346.0, step=10.0, format="%.0f")
+        # 綁定 key 以便程式控制
+        current_index = st.number_input("今日大盤收盤點數", value=31346.0, step=10.0, format="%.0f", key="input_index")
         
         mdd_pct = ((final_ath - current_index) / final_ath) * 100 if final_ath > 0 else 0.0
         st.info(f"📉 目前 MDD: {mdd_pct:.2f}% (ATH: {final_ath:,.0f})")
@@ -74,32 +94,32 @@ with st.sidebar:
         level_sign = "+" if ratchet_level > 0 else ""
         st.caption(f"ℹ️ 目前位階: {level_sign}{ratchet_level}")
 
-    # B. 資產數據輸入
+    # B. 資產數據輸入 (所有輸入框都綁定 key)
     with st.expander("1. 攻擊型資產 (正二)", expanded=True):
         c1, c2 = st.columns(2)
-        p_675 = c1.number_input("00675L 價格", value=185.0, step=0.1)
-        s_675 = c2.number_input("00675L 股數", value=11000, step=1000)
+        p_675 = c1.number_input("00675L 價格", value=185.0, step=0.1, key="p_675")
+        s_675 = c2.number_input("00675L 股數", value=11000, step=1000, key="s_675")
         c3, c4 = st.columns(2)
-        p_631 = c3.number_input("00631L 價格", value=466.7, step=0.1)
-        s_631 = c4.number_input("00631L 股數", value=331, step=100)
+        p_631 = c3.number_input("00631L 價格", value=466.7, step=0.1, key="p_631")
+        s_631 = c4.number_input("00631L 股數", value=331, step=100, key="s_631")
         c5, c6 = st.columns(2)
-        p_670 = c5.number_input("00670L 價格", value=157.95, step=0.1)
-        s_670 = c6.number_input("00670L 股數", value=616, step=100)
+        p_670 = c5.number_input("00670L 價格", value=157.95, step=0.1, key="p_670")
+        s_670 = c6.number_input("00670L 股數", value=616, step=100, key="s_670")
 
     with st.expander("2. 核心資產 (美股)", expanded=True):
         c1, c2 = st.columns(2)
-        p_662 = c1.number_input("00662 價格", value=102.25, step=0.1)
-        s_662 = c2.number_input("00662 股數", value=25840, step=100)
+        p_662 = c1.number_input("00662 價格", value=102.25, step=0.1, key="p_662")
+        s_662 = c2.number_input("00662 股數", value=25840, step=100, key="s_662")
 
     with st.expander("3. 防禦資產 (現金流)", expanded=True):
         c1, c2 = st.columns(2)
-        p_713 = c1.number_input("00713 價格", value=52.10, step=0.05)
-        s_713 = c2.number_input("00713 股數", value=66000, step=1000)
+        p_713 = c1.number_input("00713 價格", value=52.10, step=0.05, key="p_713")
+        s_713 = c2.number_input("00713 股數", value=66000, step=1000, key="s_713")
 
     with st.expander("4. 子彈庫 (國庫券/債券)", expanded=True):
         c1, c2 = st.columns(2)
-        p_865 = c1.number_input("00865B 價格", value=47.51, step=0.01)
-        s_865 = c2.number_input("00865B 股數", value=10000, step=1000)
+        p_865 = c1.number_input("00865B 價格", value=47.51, step=0.01, key="p_865")
+        s_865 = c2.number_input("00865B 股數", value=10000, step=1000, key="s_865")
 
     st.subheader("5. 負債監控")
     loan_amount = st.number_input("目前質押借款總額 (O)", value=2350000, step=10000)
@@ -170,18 +190,20 @@ with st.sidebar:
     if st.button("💾 儲存今日資產紀錄 (含明細)", type="primary"):
         now_str = datetime.now(pytz.timezone('Asia/Taipei')).strftime("%Y-%m-%d %H:%M")
         
-        # 準備要儲存的所有資料
+        # 準備要儲存的所有資料 (新增 大盤與 ATH)
         save_data = {
             "Date": now_str,
             "Total_Assets": total_assets,
             "Net_Assets": net_assets,
             "MDD": mdd_pct,
+            "Current_Index": current_index, # 新增
+            "ATH": final_ath,               # 新增
             # 股價 (P)
-            "P_675": p_675, "P_631": p_631, "P_670": p_670,
-            "P_662": p_662, "P_713": p_713, "P_865": p_865,
+            "P_00675": p_675, "P_00631": p_631, "P_00670": p_670,
+            "P_00662": p_662, "P_00713": p_713, "P_00865": p_865,
             # 股數 (S)
-            "S_675": s_675, "S_631": s_631, "S_670": s_670,
-            "S_662": s_662, "S_713": s_713, "S_865": s_865
+            "S_00675": s_675, "S_00631": s_631, "S_00670": s_670,
+            "S_00662": s_662, "S_00713": s_713, "S_00865": s_865
         }
         
         save_record(save_data)
@@ -291,6 +313,7 @@ with tab2:
     st.subheader("⚙️ 每日操作流程 (Daily Routine)")
     st.markdown("""
     1.  **資料更新 (Data Check)**
+        * **[New!]** 點擊側邊欄上方的 **「📂 載入上次存檔數據」**，快速還原上次的持股狀態。
         * 確認側邊欄的 `自動抓取 ATH` 數值是否合理。若有落差，勾選「手動修正」並輸入正確數值。
         * 確認 `今日大盤收盤點數` 為最新數據。
         * 更新各類資產的 **「股數」** 與最新的 **「質押借款總額」**。
@@ -305,7 +328,7 @@ with tab2:
     
     3.  **存檔記錄 (Archive)**
         * 確認無誤後，點擊側邊欄底部的 **「💾 儲存今日資產紀錄」**。
-        * 系統會將**總資產**與**所有持股明細 (價格與股數)** 一併寫入 CSV。
+        * 系統會自動計算與上次的資產差異。
     """)
     
     st.divider()
