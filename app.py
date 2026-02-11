@@ -66,7 +66,7 @@ with st.sidebar:
             help="此為 <5% 的基準。範圍 20%~30%。"
         )
         
-        # 【修正點】計算目前的位階 (邏輯：20%是0, 21%是+1... 因此公式為 基準-20)
+        # 計算目前的位階 (邏輯：20%是0, 21%是+1... 因此公式為 基準-20)
         ratchet_level = int(base_exposure - 20)
         
         # 顯示位階提示 (正數加號，0不加)
@@ -189,21 +189,39 @@ threshold = 3.0
 
 # --- 4. 儀表板顯示區 ---
 
-# === 區塊一：戰略位階地圖 ===
+# === 區塊一：戰略位階地圖 (更新版面：加入目前攻擊曝險) ===
 st.subheader("1. 動態戰略地圖")
 
-m1, m2, m3 = st.columns([1, 1, 2])
-m1.metric("📉 目前大盤 MDD", f"-{mdd_pct:.2f}%", help=f"計算基準 ATH: {final_ath:,.0f}")
-m2.metric("🎯 當前目標曝險", f"{target_attack_ratio:.0f}%", help=f"位階: {current_tier_name}")
+# 【修改點】改為 4 欄配置，加入目前攻擊曝險
+m1, m2, m3, m4 = st.columns([1, 1, 1, 2])
 
+# 1. MDD
+m1.metric("📉 目前大盤 MDD", f"-{mdd_pct:.2f}%", help=f"計算基準 ATH: {final_ath:,.0f}")
+
+# 2. 【新增】目前攻擊曝險 (含偏離度)
+gap_color = "off"
+if abs(gap) > threshold:
+    gap_color = "inverse" # 超過閥值亮紅燈
+
+m2.metric(
+    "⚡ 目前攻擊曝險", 
+    f"{current_attack_ratio:.2f}%", 
+    delta=f"{gap:+.2f}% (偏離)", # 顯示偏離度
+    delta_color=gap_color,
+    help="即時計算：攻擊型資產 / 總資產"
+)
+
+# 3. 目標曝險
+m3.metric("🎯 當前目標曝險", f"{target_attack_ratio:.0f}%", help=f"位階: {current_tier_name}")
+
+# 4. 階梯表
 # 高亮目前的階梯表
 df_ladder = pd.DataFrame(ladder_data)
 def highlight_current_row(row):
     color = '#ffcccc' if row['位階'] == current_tier_name else ''
     return [f'background-color: {color}' for _ in row]
 
-with m3:
-    # 顯示格式化後的位階 (例如: +3位階)
+with m4:
     level_str = f"+{ratchet_level}" if ratchet_level > 0 else f"{ratchet_level}"
     st.caption(f"ℹ️ {level_str}位階動態曝險 (基準: {base_exposure:.0f}%)")
     
