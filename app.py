@@ -82,7 +82,7 @@ with st.sidebar:
         s_713 = c2.number_input("00713 股數", value=66000, step=1000)
 
     with st.expander("4. 子彈庫 (國庫券/債券)", expanded=True):
-        # 【修改】移除 00948B，只保留 00865B
+        # 【修改】已移除 00948B，只保留 00865B
         c1, c2 = st.columns(2)
         p_865 = c1.number_input("00865B 價格", value=47.51, step=0.01)
         s_865 = c2.number_input("00865B 股數", value=10000, step=1000)
